@@ -13,7 +13,6 @@ using TODO.Service;
 using TODO.Services;
 using TODO.Sockets;
 using Microsoft.Data.SqlClient; // For retry logic
-using Polly; // Add Polly for retry policies
 
 var builder = WebApplication.CreateBuilder(args);
 
