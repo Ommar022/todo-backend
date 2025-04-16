@@ -17,7 +17,7 @@ services:
       - app-network
 
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStrong!Pass123
