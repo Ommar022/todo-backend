@@ -25,15 +25,22 @@ namespace eco_m.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _userService.SignUpAsync(signUpDTO);
+            try
+            {
+                var result = await _userService.SignUpAsync(signUpDTO);
 
-            if (result is List<string> errors)
-                return BadRequest(new { Errors = errors });
+                if (result is List<string> errors)
+                    return BadRequest(new { Errors = errors });
 
-            if (result is object error && error.GetType().GetProperty("Message")?.GetValue(error) as string == "Invalid Base64 image data provided")
-                return BadRequest(error);
+                if (result is object error && error.GetType().GetProperty("Message")?.GetValue(error) as string == "Invalid Base64 image data provided")
+                    return BadRequest(error);
 
-            return Ok(result);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred during sign up", Error = ex.Message });
+            }
         }
 
         [HttpPost("login")]
@@ -42,15 +49,22 @@ namespace eco_m.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var result = await _userService.LoginUserAsync(loginDTO);
-
-            if (result is object error && error.GetType().GetProperty("Message")?.GetValue(error) is string message)
+            try
             {
-                if (message == "Invalid credentials" || message == "Your account is inactive. Please contact an admin to reactivate your account.")
-                    return Unauthorized(error);
-            }
+                var result = await _userService.LoginUserAsync(loginDTO);
 
-            return Ok(result);
+                if (result is object error && error.GetType().GetProperty("Message")?.GetValue(error) is string message)
+                {
+                    if (message == "Invalid credentials" || message == "Your account is inactive. Please contact an admin to reactivate your account.")
+                        return Unauthorized(error);
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred during login", Error = ex.Message });
+            }
         }
 
         [HttpGet("users")]
