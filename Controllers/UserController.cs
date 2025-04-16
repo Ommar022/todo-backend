@@ -5,6 +5,7 @@ using TODO.IService;
 using Microsoft.AspNetCore.Authorization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Microsoft.Data.SqlClient;
 
 namespace eco_m.Controllers
 {
@@ -37,11 +38,16 @@ namespace eco_m.Controllers
 
                 return Ok(result);
             }
+            catch (SqlException sqlEx)
+            {
+                return StatusCode(500, new { Message = "An error occurred during sign up", Error = sqlEx.Message });
+            }
             catch (Exception ex)
             {
-                return StatusCode(500, new { Message = "An error occurred during sign up", Error = ex.Message });
+                return StatusCode(500, new { Message = "An unexpected error occurred", Error = ex.Message });
             }
         }
+
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDTO loginDTO)
