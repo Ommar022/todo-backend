@@ -28,12 +28,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Pass123' -Q 'SELECT 1' -b -h -1 || exit 1"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Pass123' -Q 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 60s
-    mem_limit: 4g  # Ensure SQL Server has enough memory
+      retries: 10
+      start_period: 30s
 
 networks:
   app-network:
@@ -41,5 +40,3 @@ networks:
 
 volumes:
   sqlserver-data:
-
-   # docker-compose up --build
