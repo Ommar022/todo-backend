@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using TODO.Data;
 using TODO.IService;
@@ -12,7 +11,6 @@ using TODO.Model;
 using TODO.Service;
 using TODO.Services;
 using TODO.Sockets;
-using Microsoft.Data.SqlClient; // For retry logic
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,16 +60,10 @@ builder.Services.AddSwaggerGen(c =>
 var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ?? builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseSqlServer(connectionString, sqlOptions =>
+    options.UseNpgsql(connectionString, sqlOptions =>
     {
-        sqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(10),
-            errorNumbersToAdd: null
-        );
-    })
-    .EnableSensitiveDataLogging() // For debugging
-    .EnableDetailedErrors();
+        sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+    });
 });
 
 // Identity
@@ -105,7 +97,7 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        NameClaimType = JwtRegisteredClaimNames.Sub
+        NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier
     };
 });
 
