@@ -12,17 +12,23 @@ using TODO.Model;
 using TODO.Service;
 using TODO.Services;
 using TODO.Sockets;
+using Microsoft.Data.SqlClient; // For retry logic
+using Polly; // Add Polly for retry policies
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    });
+// Bind to Railway's dynamic port
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://*:{port}");
 
+// Add services to container
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+});
+
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Todo API", Version = "v1" });
@@ -46,16 +52,30 @@ builder.Services.AddSwaggerGen(c =>
                 },
                 Scheme = "oauth2",
                 Name = "Bearer",
-                In = ParameterLocation.Header,
+                In = ParameterLocation.Header
             },
             new List<string>()
         }
     });
 });
 
+// Database with retry logic
+var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ?? builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null
+        );
+    })
+    .EnableSensitiveDataLogging() // For debugging
+    .EnableDetailedErrors();
+});
 
+// Identity
 builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
 {
     options.Password.RequireDigit = true;
@@ -66,8 +86,10 @@ builder.Services.AddIdentity<User, IdentityRole<int>>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
+// JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is missing in configuration"));
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -88,19 +110,18 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Custom Services
 builder.Services.AddScoped<ITodoService, TodoService>();
 builder.Services.AddScoped<ITodoListService, TodoListService>();
 builder.Services.AddScoped<ITodoStatusService, TodoStatusService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<ILogService, LogService>();
-
-
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddSingleton<WebSocketHandler>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IUserService, UserService>();
-
 builder.Services.AddAutoMapper(typeof(Program));
 
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -111,21 +132,22 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Build app
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Swagger UI
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "TODO API V1");
+});
 
-// Remove HTTPS redirection
-// app.UseHttpsRedirection();
-
+// Middleware pipeline
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// WebSocket Endpoint
 app.UseWebSockets();
 app.Map("/ws", async context =>
 {
@@ -133,6 +155,8 @@ app.Map("/ws", async context =>
     await wsHandler.HandleWebSocket(context);
 });
 
+// Map controllers
 app.MapControllers();
 
+// Run the app
 app.Run();
